@@ -1,200 +1,205 @@
 import tkinter as tk
 from tkinter import messagebox
 
-# Set up the game board as a list
-board = ["-" for _ in range(9)]
-user = None
-current_player = None
-difficulty_levels = (1, 2, 3, 4, 5, 6)
-selected_difficulty = 1
+DIFFICULTY_OPTIONS = tuple(range(1, 10))
+WINNING_LINES = \
+    (
+        (0, 1, 2),
+        (3, 4, 5),
+        (6, 7, 8),
+        (0, 3, 6),
+        (1, 4, 7),
+        (2, 5, 8),
+        (0, 4, 8),
+        (2, 4, 6),
+    )
 
 
-# Define the GUI layout and widgets
-class TicTacToeGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Tic Tac Toe")
-
-        self.board_frame = tk.Frame(self.root)
-        self.board_frame.pack()
-
-        self.buttons = []
-        for i in range(9):
-            button = tk.Button(self.board_frame, text="", width=6, height=3,
-                               command=lambda idx=i: self.handle_click(idx))
-            button.grid(row=i // 3, column=i % 3)
-            self.buttons.append(button)
-
-        self.replay_button = tk.Button(self.root, text="Replay", command=self.init_game)
-        self.replay_button.pack()
-
-        self.difficulty_label = tk.Label(self.root, text="Select difficulty:")
-        self.difficulty_label.pack()
-
-        self.difficulty_var = tk.StringVar()
-        self.difficulty_var.set("1")
-        self.difficulty_menu = tk.OptionMenu(self.root, self.difficulty_var,
-                                             *difficulty_levels, command=self.update_difficulty)
-        self.difficulty_menu.pack()
-
-        self.init_game()
-
-    def update_difficulty(self, event=None):
-        global selected_difficulty
-        selected_difficulty = int(self.difficulty_var.get())
-
-    def init_game(self):
-        global user, current_player, board
-        user = None
-        current_player = None
-        board = ["-" for _ in range(9)]
-
-        user_choice = tk.messagebox.askquestion("Choose X or O", "Do you want to play as X?")
-        user = 'X' if user_choice == 'yes' else 'O'
-        current_player = 'X' if user == 'O' else 'O'
-        if current_player == 'X':
-            self.ai_move()
-
-        self.update_board_ui()
-
-    def update_board_ui(self):
-        for i in range(9):
-            if board[i] != "-":
-                self.buttons[i].config(text=board[i], state=tk.DISABLED)
-            else:
-                self.buttons[i].config(text="", state=tk.NORMAL)
-
-    def handle_click(self, idx):
-        global current_player
-        if 0 <= idx < len(board) and current_player == user and board[idx] == "-":
-            board[idx] = user
-            self.update_board_ui()
-            self.check_game_over()
-            current_player = 'O' if current_player == 'X' else 'X'
-            if current_player != user:
-                self.ai_move()
-
-    def check_game_over(self):
-        global board
-        for a, b, c in ((0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6)):
-            if board[a] == board[b] == board[c] != "-":
-                messagebox.showinfo("Game Over", f"{board[a]} wins!")
-                self.init_game()
-                return
-        if "-" not in board:
-            messagebox.showinfo("Game Over", "It's a tie!")
-            self.init_game()
-
-    def ai_move(self):
-        global current_player
-        best_move = find_best_move(board, current_player)
-        board[best_move] = current_player
-        self.update_board_ui()
-        self.check_game_over()
-        current_player = 'O' if current_player == 'X' else 'X'
+def has_moves_left(board_state):
+    return "-" in board_state
 
 
-def are_moves_left(board):
-    return '-' in board
-
-
-def evaluate(board):
-    # Checking for rows for X or O victory
-    for row in range(0, 9, 3):
-        if board[row] == board[row + 1] == board[row + 2] != '-':
-            return 10 if board[row] == 'X' else -10
-    # Checking for columns for X or O victory
-    for col in range(3):
-        if board[col] == board[col + 3] == board[col + 6] != '-':
-            return 10 if board[col] == 'X' else -10
-    # Checking for diagonals for X or O victory
-    if board[0] == board[4] == board[8] != '-':
-        return 10 if board[0] == 'X' else -10
-    if board[2] == board[4] == board[6] != '-':
-        return 10 if board[2] == 'X' else -10
-    # Else if none of them have won, then return 0
+def evaluate_board_state(board_state):
+    for a, b, c in WINNING_LINES:
+        symbol = board_state[a]
+        if symbol == board_state[b] == board_state[c] and symbol != "-":
+            return 10 if symbol == "X" else -10
     return 0
 
 
-# Minimax algorithm with alpha-beta pruning
-def minimax(board, depth, is_max, alpha, beta, max_depth):
-    """
-        Minimax algorithm with alpha-beta pruning for Tic Tac Toe.
-
-        Args:
-            board (list): The current state of the game board.
-            depth (int): The current depth in the game tree.
-            is_max (bool): Indicates whether it's the maximizing player's turn.
-            alpha (float): The best value that the maximizing player currently can guarantee.
-            beta (float): The best value that the minimizing player currently can guarantee.
-            max_depth (int): The maximum depth to explore in the game tree.
-
-        Returns:
-            float: The evaluation value of the current board state.
-    """
-    # Base case: if the maximum depth is reached or there are no moves left
-    if depth == max_depth or not are_moves_left(board):
-        return evaluate(board)
-
-    if is_max:
-        best = -1000
-        for i in range(9):
-            if board[i] == '-':
-                board[i] = 'X'
-                # Recur for the next depth with a minimizing turn
-                value = minimax(board, depth + 1, not is_max, alpha, beta, max_depth)
-                board[i] = '-'  # Backtrack
-                best = max(best, value)
-                alpha = max(alpha, best)
+def minimax_search(board_state, current_depth, is_maximizing, alpha, beta, depth_limit):
+    score = evaluate_board_state(board_state)
+    if score == 10 or score == -10 or current_depth == depth_limit or not has_moves_left(board_state):
+        return score
+    if is_maximizing:
+        best_score = float("-inf")
+        for index in range(len(board_state)):
+            if board_state[index] == "-":
+                board_state[index] = "X"
+                value = minimax_search(board_state, current_depth + 1, False, alpha, beta, depth_limit)
+                board_state[index] = "-"
+                best_score = max(best_score, value)
+                alpha = max(alpha, best_score)
                 if beta <= alpha:
                     break
-        return best
+        return best_score
     else:
-        best = 1000
-        for i in range(9):
-            if board[i] == '-':
-                board[i] = 'O'
-                # Recur for the next depth with a maximizing turn
-                value = minimax(board, depth + 1, not is_max, alpha, beta, max_depth)
-                board[i] = '-'  # Backtrack
-                best = min(best, value)
-                beta = min(beta, best)
+        best_score = float("inf")
+        for index in range(len(board_state)):
+            if board_state[index] == "-":
+                board_state[index] = "O"
+                value = minimax_search(board_state, current_depth + 1, True, alpha, beta, depth_limit)
+                board_state[index] = "-"
+                best_score = min(best_score, value)
+                beta = min(beta, best_score)
                 if beta <= alpha:
                     break
-        return best
+        return best_score
 
 
-def find_best_move(board, player):
-    """
-        Finds the best move for the specified player using the minimax algorithm.
-
-        Args:
-            board (list): The current state of the game board.
-            player (str): The player for whom the best move is being calculated ('X' or 'O').
-
-        Returns:
-            int: The index of the best move for the specified player.
-    """
-    best_value = float('-inf') if player == 'X' else float('inf')
+def compute_best_move(board_state, player_symbol, depth_limit):
     best_move = -1
-    alpha = float('-inf')
-    beta = float('inf')
-    max_depth = selected_difficulty
-    for i in range(9):
-        if board[i] == '-':
-            board[i] = player
-            # Call minimax to evaluate the current move
-            move_value = minimax(board, 0, player == 'O', alpha, beta, max_depth)
-            board[i] = '-'  # Backtrack
-            # Update the best move if a better move is found
-            if (player == 'X' and move_value > best_value) or (player == 'O' and move_value < best_value):
-                best_move = i
+    if player_symbol == "X":
+        best_value = float("-inf")
+    else:
+        best_value = float("inf")
+    alpha = float("-inf")
+    beta = float("inf")
+    for index in range(len(board_state)):
+        if board_state[index] == "-":
+            board_state[index] = player_symbol
+            next_is_maximizing = player_symbol == "O"
+            move_value = minimax_search(board_state, 0, next_is_maximizing, alpha, beta, depth_limit)
+            board_state[index] = "-"
+            if (player_symbol == "X" and move_value > best_value) or (player_symbol == "O" and move_value < best_value):
                 best_value = move_value
+                best_move = index
     return best_move
 
 
-if __name__ == '__main__':
-    # Initialize Tkinter
+class TicTacToeApp:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("Tic Tac Toe")
+        self.master.geometry("600x700")
+        self.master.resizable(True, True)
+        self.human_symbol = None
+        self.ai_symbol = None
+        self.current_turn = None
+        self.max_search_depth = DIFFICULTY_OPTIONS[0]
+        self._setup_selection_panel()
+
+    def _setup_selection_panel(self):
+        self.selection_frame = tk.Frame(self.master)
+        self.selection_frame.pack(expand=True)
+
+        prompt_label = tk.Label(self.selection_frame, text="Choose your symbol:", font=("Arial", 24))
+        prompt_label.pack(pady=20)
+
+        self.symbol_choice_var = tk.StringVar(value="X")
+
+        radio_x = tk.Radiobutton( self.selection_frame, text="Play as X", variable=self.symbol_choice_var, value="X", font=("Arial", 18), width=15)
+        radio_x.pack(pady=5, anchor="w")
+
+        radio_o = tk.Radiobutton( self.selection_frame, text="Play as O", variable=self.symbol_choice_var, value="O", font=("Arial", 18), width=15)
+        radio_o.pack(pady=5, anchor="w")
+
+        start_button = tk.Button(self.selection_frame, text="Start Game", font=("Arial", 24), command=self._start_game,)
+        start_button.pack(pady=20)
+
+    def _start_game(self):
+        self.human_symbol = self.symbol_choice_var.get()
+        self.ai_symbol = "O" if self.human_symbol == "X" else "X"
+        self.current_turn = "X"
+        self.selection_frame.destroy()
+        self._setup_game_panel()
+        if self.current_turn == self.ai_symbol:
+            self.master.after(100, self._execute_ai_move)
+
+    def _setup_game_panel(self):
+        self.control_frame = tk.Frame(self.master)
+        self.control_frame.pack(pady=10)
+
+        restart_button = tk.Button(self.control_frame, text="Restart", font=("Arial", 18), command=self._reset_to_selection,)
+        restart_button.pack(side="left", padx=10)
+
+        difficulty_label = tk.Label(self.control_frame, text="Difficulty:", font=("Arial", 18) )
+        difficulty_label.pack(side="left")
+
+        self.difficulty_variable = tk.StringVar(value=str(self.max_search_depth))
+        difficulty_menu = tk.OptionMenu(self.control_frame, self.difficulty_variable,
+                                        *DIFFICULTY_OPTIONS, command=self._on_difficulty_changed, )
+        difficulty_menu.config(font=("Arial", 14))
+        difficulty_menu.pack(side="left", padx=10)
+
+        self.board_frame = tk.Frame(self.master)
+        self.board_frame.pack(expand=True)
+
+        self.cell_buttons = []
+        self.game_board = ["-" for _ in range(9)]
+
+        for index in range(9):
+            button = tk.Button( self.board_frame, text="", width=4, height=2, font=("Arial", 48),
+                                command=lambda idx=index: self._on_cell_clicked(idx),)
+            button.grid(row=index // 3, column=index % 3, padx=5, pady=5)
+            self.cell_buttons.append(button)
+
+        self._update_board_ui()
+
+    def _on_difficulty_changed(self, _):
+        self.max_search_depth = self.difficulty_variable.get()
+
+    def _reset_to_selection(self):
+        self.control_frame.destroy()
+        self.board_frame.destroy()
+        self._setup_selection_panel()
+
+    def _on_cell_clicked(self, index):
+        if self.current_turn == self.human_symbol and self.game_board[index] == "-":
+            self.game_board[index] = self.human_symbol
+            self._update_board_ui()
+            if self._check_for_end():
+                return
+            self.current_turn = self.ai_symbol
+            self.master.after(100, self._execute_ai_move)
+
+    def _execute_ai_move(self):
+        best_index = compute_best_move(self.game_board, self.current_turn, self.max_search_depth)
+        if best_index != -1:
+            self.game_board[best_index] = self.current_turn
+            self._update_board_ui()
+            if self._check_for_end():
+                return
+            self.current_turn = self.human_symbol
+
+    def _update_board_ui(self):
+        for idx, button in enumerate(self.cell_buttons):
+            symbol = self.game_board[idx]
+            if symbol == "-":
+                button.config(text="", state="normal")
+            else:
+                button.config(text=symbol, state="disabled")
+
+    def _check_for_end(self):
+        winner = self._determine_winner()
+        if winner:
+            messagebox.showinfo("Game Over", f"{winner} wins!")
+            self._reset_to_selection()
+            return True
+        if not has_moves_left(self.game_board):
+            messagebox.showinfo("Game Over", "It’s a tie!")
+            self._reset_to_selection()
+            return True
+        return False
+
+    def _determine_winner(self):
+        for a, b, c in WINNING_LINES:
+            if self.game_board[a] == self.game_board[b] == self.game_board[c] != "-":
+                return self.game_board[a]
+        return None
+
+
+if __name__ == "__main__":
     root = tk.Tk()
-    app = TicTacToeGUI(root)
+    app = TicTacToeApp(root)
     root.mainloop()
