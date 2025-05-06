@@ -14,6 +14,8 @@ WINNING_LINES = \
         (2, 4, 6),
     )
 
+BONUS = 11
+
 
 def has_moves_left(board_state):
     return "-" in board_state
@@ -23,14 +25,38 @@ def evaluate_board_state(board_state):
     for a, b, c in WINNING_LINES:
         symbol = board_state[a]
         if symbol == board_state[b] == board_state[c] and symbol != "-":
-            return 10 if symbol == "X" else -10
-    return 0
+            return 100 if symbol == "X" else -100
+
+    open_lines_max = 0
+    open_lines_min = 0
+    two_in_row_max = 0
+    two_in_row_min = 0
+
+    for a, b, c in WINNING_LINES:
+        line = (board_state[a], board_state[b], board_state[c])
+        if "O" not in line:
+            open_lines_max += 1
+            if line.count("X") == 2:
+                two_in_row_max += 1
+        if "X" not in line:
+            open_lines_min += 1
+            if line.count("O") == 2:
+                two_in_row_min += 1
+
+    score = (open_lines_max - open_lines_min) + BONUS * (two_in_row_max - two_in_row_min)
+    if board_state[4] == "X":
+        score += BONUS
+    elif board_state[4] == "O":
+        score -= BONUS
+
+    return score
 
 
 def minimax_search(board_state, current_depth, is_maximizing, alpha, beta, depth_limit):
     score = evaluate_board_state(board_state)
-    if score == 10 or score == -10 or current_depth == depth_limit or not has_moves_left(board_state):
+    if score == 100 or score == -100 or current_depth == depth_limit or not has_moves_left(board_state):
         return score
+
     if is_maximizing:
         best_score = float("-inf")
         for index in range(len(board_state)):
@@ -40,8 +66,9 @@ def minimax_search(board_state, current_depth, is_maximizing, alpha, beta, depth
                 board_state[index] = "-"
                 best_score = max(best_score, value)
                 alpha = max(alpha, best_score)
-                if beta <= alpha:
+                if alpha >= beta:
                     break
+
         return best_score
     else:
         best_score = float("inf")
@@ -52,17 +79,47 @@ def minimax_search(board_state, current_depth, is_maximizing, alpha, beta, depth
                 board_state[index] = "-"
                 best_score = min(best_score, value)
                 beta = min(beta, best_score)
-                if beta <= alpha:
+                if alpha >= beta:
                     break
+
+        return best_score
+
+
+def minimax_plain(board_state, current_depth, is_maximizing, depth_limit):
+    score = evaluate_board_state(board_state)
+    if score == 100 or score == -100 or current_depth == depth_limit or not has_moves_left(board_state):
+        return score
+
+    if is_maximizing:
+        best_score = float("-inf")
+        for index in range(len(board_state)):
+            if board_state[index] == "-":
+                board_state[index] = "X"
+                value = minimax_plain(board_state, current_depth + 1, False, depth_limit)
+                board_state[index] = "-"
+                best_score = max(best_score, value)
+
+        return best_score
+    else:
+        best_score = float("inf")
+        for index in range(len(board_state)):
+            if board_state[index] == "-":
+                board_state[index] = "O"
+                value = minimax_plain(board_state, current_depth + 1, True, depth_limit)
+                board_state[index] = "-"
+                best_score = min(best_score, value)
+
         return best_score
 
 
 def compute_best_move(board_state, player_symbol, depth_limit):
     best_move = -1
+
     if player_symbol == "X":
         best_value = float("-inf")
     else:
         best_value = float("inf")
+
     alpha = float("-inf")
     beta = float("inf")
     for index in range(len(board_state)):
@@ -70,6 +127,22 @@ def compute_best_move(board_state, player_symbol, depth_limit):
             board_state[index] = player_symbol
             next_is_maximizing = player_symbol == "O"
             move_value = minimax_search(board_state, 0, next_is_maximizing, alpha, beta, depth_limit)
+            board_state[index] = "-"
+            if (player_symbol == "X" and move_value > best_value) or (player_symbol == "O" and move_value < best_value):
+                best_value = move_value
+                best_move = index
+    return best_move
+
+
+def compute_best_move_plain(board_state, player_symbol, depth_limit):
+    best_move = -1
+    best_value = float("-inf") if player_symbol == "X" else float("inf")
+
+    for index in range(len(board_state)):
+        if board_state[index] == "-":
+            board_state[index] = player_symbol
+            next_is_maximizing = player_symbol == "O"
+            move_value = minimax_plain(board_state, 0, next_is_maximizing, depth_limit)
             board_state[index] = "-"
             if (player_symbol == "X" and move_value > best_value) or (player_symbol == "O" and move_value < best_value):
                 best_value = move_value
@@ -98,10 +171,12 @@ class TicTacToeApp:
 
         self.symbol_choice_var = tk.StringVar(value="X")
 
-        radio_x = tk.Radiobutton( self.selection_frame, text="Play as X", variable=self.symbol_choice_var, value="X", font=("Arial", 18), width=15)
+        radio_x = tk.Radiobutton( self.selection_frame, text="Play as X", variable=self.symbol_choice_var,
+                                  value="X", font=("Arial", 18), width=15)
         radio_x.pack(pady=5, anchor="w")
 
-        radio_o = tk.Radiobutton( self.selection_frame, text="Play as O", variable=self.symbol_choice_var, value="O", font=("Arial", 18), width=15)
+        radio_o = tk.Radiobutton( self.selection_frame, text="Play as O", variable=self.symbol_choice_var,
+                                  value="O", font=("Arial", 18), width=15)
         radio_o.pack(pady=5, anchor="w")
 
         start_button = tk.Button(self.selection_frame, text="Start Game", font=("Arial", 24), command=self._start_game,)
@@ -123,14 +198,22 @@ class TicTacToeApp:
         restart_button = tk.Button(self.control_frame, text="Restart", font=("Arial", 18), command=self._reset_to_selection,)
         restart_button.pack(side="left", padx=10)
 
-        difficulty_label = tk.Label(self.control_frame, text="Difficulty:", font=("Arial", 18) )
+        difficulty_label = tk.Label(self.control_frame, text="Difficulty:", font=("Arial", 18))
         difficulty_label.pack(side="left")
 
         self.difficulty_variable = tk.StringVar(value=str(self.max_search_depth))
         difficulty_menu = tk.OptionMenu(self.control_frame, self.difficulty_variable,
-                                        *DIFFICULTY_OPTIONS, command=self._on_difficulty_changed, )
+                                        *DIFFICULTY_OPTIONS, command=self._on_difficulty_changed,)
         difficulty_menu.config(font=("Arial", 14))
         difficulty_menu.pack(side="left", padx=10)
+
+        algorithm_label = tk.Label(self.control_frame, text="Algorithm:", font=("Arial", 18))
+        algorithm_label.pack(side="left")
+
+        self.algorithm_variable = tk.StringVar(value="Alpha-Beta")
+        algorithm_menu = tk.OptionMenu(self.control_frame, self.algorithm_variable, "Minimax", "Alpha-Beta")
+        algorithm_menu.config(font=("Arial", 14))
+        algorithm_menu.pack(side="left", padx=10)
 
         self.board_frame = tk.Frame(self.master)
         self.board_frame.pack(expand=True)
@@ -140,14 +223,14 @@ class TicTacToeApp:
 
         for index in range(9):
             button = tk.Button( self.board_frame, text="", width=4, height=2, font=("Arial", 48),
-                                command=lambda idx=index: self._on_cell_clicked(idx),)
+                                command=lambda i=index: self._on_cell_clicked(i),)
             button.grid(row=index // 3, column=index % 3, padx=5, pady=5)
             self.cell_buttons.append(button)
 
         self._update_board_ui()
 
     def _on_difficulty_changed(self, _):
-        self.max_search_depth = self.difficulty_variable.get()
+        self.max_search_depth = int(self.difficulty_variable.get())
 
     def _reset_to_selection(self):
         self.control_frame.destroy()
@@ -164,7 +247,11 @@ class TicTacToeApp:
             self.master.after(100, self._execute_ai_move)
 
     def _execute_ai_move(self):
-        best_index = compute_best_move(self.game_board, self.current_turn, self.max_search_depth)
+        if self.algorithm_variable.get() == "Minimax":
+            best_index = compute_best_move_plain(self.game_board, self.current_turn, self.max_search_depth)
+        else:
+            best_index = compute_best_move(self.game_board, self.current_turn, self.max_search_depth)
+
         if best_index != -1:
             self.game_board[best_index] = self.current_turn
             self._update_board_ui()
@@ -173,8 +260,8 @@ class TicTacToeApp:
             self.current_turn = self.human_symbol
 
     def _update_board_ui(self):
-        for idx, button in enumerate(self.cell_buttons):
-            symbol = self.game_board[idx]
+        for i, button in enumerate(self.cell_buttons):
+            symbol = self.game_board[i]
             if symbol == "-":
                 button.config(text="", state="normal")
             else:
