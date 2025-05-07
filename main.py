@@ -1,8 +1,12 @@
 import tkinter as tk
 from tkinter import messagebox
 
-from tkbootstrap import Style
-from tkbootstrap.widgets import Button, Radiobutton, Label, OptionMenu
+import customtkinter as ctk
+from customtkinter import CTk, CTkFrame, CTkButton, CTkRadioButton, CTkLabel, CTkOptionMenu
+
+# Initialize dark theme
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("dark-blue")
 
 DIFFICULTY_OPTIONS = tuple(range(1, 10))
 WINNING_LINES = \
@@ -176,67 +180,71 @@ class TicTacToeApp:
         self._setup_selection_panel()
 
     def _setup_selection_panel(self):
-        self.selection_frame = tk.Frame(self.master)
+        self.selection_frame = CTkFrame(self.master)  # dark‐mode frame :contentReference[oaicite:9]{index=9}
         self.selection_frame.pack(expand=True)
 
-        prompt_label = tk.Label(self.selection_frame, text="Choose your symbol:", font=("Arial", 24))
+        prompt_label = CTkLabel(self.selection_frame, text="Choose your symbol:", font=("Arial", 24))
         prompt_label.pack(pady=20)
 
         self.symbol_choice_var = tk.StringVar(value="X")
 
-        radio_x = tk.Radiobutton( self.selection_frame, text="Play as X", variable=self.symbol_choice_var,
-                                  value="X", font=("Arial", 18), width=15)
+        radio_x = CTkRadioButton(self.selection_frame, text="Play as X", variable=self.symbol_choice_var,
+                                 value="X", font=("Arial", 18), width=150)
         radio_x.pack(pady=5, anchor="w")
 
-        radio_o = tk.Radiobutton( self.selection_frame, text="Play as O", variable=self.symbol_choice_var,
-                                  value="O", font=("Arial", 18), width=15)
+        radio_o = CTkRadioButton(self.selection_frame, text="Play as O", variable=self.symbol_choice_var, value="O",
+                                 font=("Arial", 18), width=150)
         radio_o.pack(pady=5, anchor="w")
 
-        start_button = tk.Button(self.selection_frame, text="Start Game", font=("Arial", 24), command=self._start_game,)
-        start_button.pack(pady=20)
-
         # Algorithm selector
-        algorithm_label = tk.Label(self.selection_frame, text="Algorithm:", font=("Arial", 18))
+        algorithm_label = CTkLabel(self.selection_frame, text="Algorithm:", font=("Arial", 18))
         algorithm_label.pack(pady=5, anchor="w")
+
         self.algorithm_variable = tk.StringVar(value="Alpha-Beta")
-        algorithm_menu = tk.OptionMenu(self.selection_frame, self.algorithm_variable, "Minimax", "Alpha-Beta")
-        algorithm_menu.config(font=("Arial", 18))
+        algorithm_menu = CTkOptionMenu(self.selection_frame, variable=self.algorithm_variable, values=["Minimax", "Alpha-Beta"])
         algorithm_menu.pack(pady=5, anchor="w")
 
         # Difficulty selector
-        difficulty_label = tk.Label(self.selection_frame, text="Difficulty:", font=("Arial", 18))
+        difficulty_label = CTkLabel(self.selection_frame, text="Difficulty:", font=("Arial", 18))
         difficulty_label.pack(pady=5, anchor="w")
+
         self.difficulty_variable = tk.StringVar(value=str(self.max_search_depth))
-        difficulty_menu = tk.OptionMenu(self.selection_frame, self.difficulty_variable, *DIFFICULTY_OPTIONS)
-        difficulty_menu.config(font=("Arial", 18))
+        difficulty_menu = CTkOptionMenu(self.selection_frame, variable=self.difficulty_variable,
+                                        values=[str(option) for option in DIFFICULTY_OPTIONS])
         difficulty_menu.pack(pady=5, anchor="w")
 
+        start_button = CTkButton(self.selection_frame, text="Start Game", font=("Arial", 24),
+                                 command=self._start_game)
+        start_button.pack(pady=20)
+
     def _start_game(self):
-        self.max_search_depth = int(self.difficulty_variable.get()) # Read algorithm and difficulty before destroying selection frame
-        self.human_symbol = self.symbol_choice_var.get()    # Algorithm choice is in self.algorithm_variable.get()
+        self.max_search_depth = int(self.difficulty_variable.get())
+        self.human_symbol = self.symbol_choice_var.get()
         self.ai_symbol = "O" if self.human_symbol == "X" else "X"
         self.current_turn = "X"
         self.selection_frame.destroy()
         self._setup_game_panel()
+
         if self.current_turn == self.ai_symbol:
             self.master.after(100, self._execute_ai_move)
 
     def _setup_game_panel(self):
-        self.control_frame = tk.Frame(self.master)
+        self.control_frame = CTkFrame(self.master)  # dark‐mode frame
         self.control_frame.pack(pady=10)
 
-        restart_button = tk.Button(self.control_frame, text="Restart", font=("Arial", 18), command=self._reset_to_selection,)
+        restart_button = CTkButton(self.control_frame, text="Restart", font=("Arial", 18),
+                                   command=self._reset_to_selection)
         restart_button.pack(side="left", padx=10)
 
-        self.board_frame = tk.Frame(self.master)
+        self.board_frame = CTkFrame(self.master)
         self.board_frame.pack(expand=True)
 
         self.cell_buttons = []
         self.game_board = ["-" for _ in range(9)]
 
         for index in range(9):
-            button = tk.Button( self.board_frame, text="", width=4, height=2, font=("Arial", 48),
-                                command=lambda i=index: self._on_cell_clicked(i),)
+            button = CTkButton(self.board_frame, text="", width=50, height=50, font=("Arial", 48),
+                               command=lambda i=index: self._on_cell_clicked(i))
             button.grid(row=index // 3, column=index % 3, padx=5, pady=5)
             self.cell_buttons.append(button)
 
@@ -276,9 +284,9 @@ class TicTacToeApp:
         for i, button in enumerate(self.cell_buttons):
             symbol = self.game_board[i]
             if symbol == "-":
-                button.config(text="", state="normal")
+                button.configure(text="", state="normal")
             else:
-                button.config(text=symbol, state="disabled")
+                button.configure(text=symbol, state="disabled")
 
     def _check_for_end(self):
         winner = self._determine_winner()
@@ -300,6 +308,6 @@ class TicTacToeApp:
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    root = CTk()
     app = TicTacToeApp(root)
     root.mainloop()
