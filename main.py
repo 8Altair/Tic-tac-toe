@@ -1,6 +1,9 @@
 import tkinter as tk
 from tkinter import messagebox
 
+from tkbootstrap import Style
+from tkbootstrap.widgets import Button, Radiobutton, Label, OptionMenu
+
 DIFFICULTY_OPTIONS = tuple(range(1, 10))
 WINNING_LINES = \
     (
@@ -52,6 +55,19 @@ def evaluate_board_state(board_state):
     return score
 
 
+def get_ordered_moves(board_state, player):
+    candidates = []
+    for i in range(len(board_state)):
+        if board_state[i] == "-":
+            board_state[i] = player
+            score = evaluate_board_state(board_state)
+            board_state[i] = "-"
+            candidates.append((i, score))
+
+    return [i for i, _ in sorted(candidates, key=lambda pair: pair[1], reverse=(player == "X"))]    # For X (maximizer), sort descending; for O (minimizer), ascending
+
+
+
 def minimax_search(board_state, current_depth, is_maximizing, alpha, beta, depth_limit):
     score = evaluate_board_state(board_state)
     if score == 100 or score == -100 or current_depth == depth_limit or not has_moves_left(board_state):
@@ -59,28 +75,26 @@ def minimax_search(board_state, current_depth, is_maximizing, alpha, beta, depth
 
     if is_maximizing:
         best_score = float("-inf")
-        for index in range(len(board_state)):
-            if board_state[index] == "-":
-                board_state[index] = "X"
-                value = minimax_search(board_state, current_depth + 1, False, alpha, beta, depth_limit)
-                board_state[index] = "-"
-                best_score = max(best_score, value)
-                alpha = max(alpha, best_score)
-                if alpha >= beta:
-                    break
+        for index in get_ordered_moves(board_state, "X"):
+            board_state[index] = "X"
+            value = minimax_search(board_state, current_depth + 1, False, alpha, beta, depth_limit)
+            board_state[index] = "-"
+            best_score = max(best_score, value)
+            alpha = max(alpha, best_score)
+            if alpha >= beta:
+                break
 
         return best_score
     else:
         best_score = float("inf")
-        for index in range(len(board_state)):
-            if board_state[index] == "-":
-                board_state[index] = "O"
-                value = minimax_search(board_state, current_depth + 1, True, alpha, beta, depth_limit)
-                board_state[index] = "-"
-                best_score = min(best_score, value)
-                beta = min(beta, best_score)
-                if alpha >= beta:
-                    break
+        for index in get_ordered_moves(board_state, "O"):
+            board_state[index] = "O"
+            value = minimax_search(board_state, current_depth + 1, True, alpha, beta, depth_limit)
+            board_state[index] = "-"
+            best_score = min(best_score, value)
+            beta = min(beta, best_score)
+            if alpha >= beta:
+                break
 
         return best_score
 
@@ -122,15 +136,14 @@ def compute_best_move(board_state, player_symbol, depth_limit):
 
     alpha = float("-inf")
     beta = float("inf")
-    for index in range(len(board_state)):
-        if board_state[index] == "-":
-            board_state[index] = player_symbol
-            next_is_maximizing = player_symbol == "O"
-            move_value = minimax_search(board_state, 0, next_is_maximizing, alpha, beta, depth_limit)
-            board_state[index] = "-"
-            if (player_symbol == "X" and move_value > best_value) or (player_symbol == "O" and move_value < best_value):
-                best_value = move_value
-                best_move = index
+    for index in get_ordered_moves(board_state, player_symbol):
+        board_state[index] = player_symbol
+        next_is_maximizing = player_symbol == "O"
+        move_value = minimax_search(board_state, 0, next_is_maximizing, alpha, beta, depth_limit)
+        board_state[index] = "-"
+        if (player_symbol == "X" and move_value > best_value) or (player_symbol == "O" and move_value < best_value):
+            best_value = move_value
+            best_move = index
     return best_move
 
 
@@ -182,8 +195,25 @@ class TicTacToeApp:
         start_button = tk.Button(self.selection_frame, text="Start Game", font=("Arial", 24), command=self._start_game,)
         start_button.pack(pady=20)
 
+        # Algorithm selector
+        algorithm_label = tk.Label(self.selection_frame, text="Algorithm:", font=("Arial", 18))
+        algorithm_label.pack(pady=5, anchor="w")
+        self.algorithm_variable = tk.StringVar(value="Alpha-Beta")
+        algorithm_menu = tk.OptionMenu(self.selection_frame, self.algorithm_variable, "Minimax", "Alpha-Beta")
+        algorithm_menu.config(font=("Arial", 18))
+        algorithm_menu.pack(pady=5, anchor="w")
+
+        # Difficulty selector
+        difficulty_label = tk.Label(self.selection_frame, text="Difficulty:", font=("Arial", 18))
+        difficulty_label.pack(pady=5, anchor="w")
+        self.difficulty_variable = tk.StringVar(value=str(self.max_search_depth))
+        difficulty_menu = tk.OptionMenu(self.selection_frame, self.difficulty_variable, *DIFFICULTY_OPTIONS)
+        difficulty_menu.config(font=("Arial", 18))
+        difficulty_menu.pack(pady=5, anchor="w")
+
     def _start_game(self):
-        self.human_symbol = self.symbol_choice_var.get()
+        self.max_search_depth = int(self.difficulty_variable.get()) # Read algorithm and difficulty before destroying selection frame
+        self.human_symbol = self.symbol_choice_var.get()    # Algorithm choice is in self.algorithm_variable.get()
         self.ai_symbol = "O" if self.human_symbol == "X" else "X"
         self.current_turn = "X"
         self.selection_frame.destroy()
@@ -197,23 +227,6 @@ class TicTacToeApp:
 
         restart_button = tk.Button(self.control_frame, text="Restart", font=("Arial", 18), command=self._reset_to_selection,)
         restart_button.pack(side="left", padx=10)
-
-        difficulty_label = tk.Label(self.control_frame, text="Difficulty:", font=("Arial", 18))
-        difficulty_label.pack(side="left")
-
-        self.difficulty_variable = tk.StringVar(value=str(self.max_search_depth))
-        difficulty_menu = tk.OptionMenu(self.control_frame, self.difficulty_variable,
-                                        *DIFFICULTY_OPTIONS, command=self._on_difficulty_changed,)
-        difficulty_menu.config(font=("Arial", 14))
-        difficulty_menu.pack(side="left", padx=10)
-
-        algorithm_label = tk.Label(self.control_frame, text="Algorithm:", font=("Arial", 18))
-        algorithm_label.pack(side="left")
-
-        self.algorithm_variable = tk.StringVar(value="Alpha-Beta")
-        algorithm_menu = tk.OptionMenu(self.control_frame, self.algorithm_variable, "Minimax", "Alpha-Beta")
-        algorithm_menu.config(font=("Arial", 14))
-        algorithm_menu.pack(side="left", padx=10)
 
         self.board_frame = tk.Frame(self.master)
         self.board_frame.pack(expand=True)
