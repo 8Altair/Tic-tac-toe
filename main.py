@@ -171,7 +171,7 @@ class TicTacToeApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Tic Tac Toe")
-        self.master.geometry("600x700")
+        self.master.geometry("700x750")
         self.master.resizable(True, True)
         self.human_symbol = None
         self.ai_symbol = None
@@ -180,42 +180,45 @@ class TicTacToeApp:
         self._setup_selection_panel()
 
     def _setup_selection_panel(self):
-        self.selection_frame = CTkFrame(self.master)  # dark‐mode frame :contentReference[oaicite:9]{index=9}
+        self.selection_frame = CTkFrame(self.master, width=700, height=750)
         self.selection_frame.pack(expand=True)
 
-        prompt_label = CTkLabel(self.selection_frame, text="Choose your symbol:", font=("Arial", 24))
-        prompt_label.pack(pady=20)
+        prompt_label = CTkLabel(self.selection_frame, text="Choose your symbol:", font=("Arial", 40, "bold"))
+        prompt_label.pack(pady=20, padx=30)
 
         self.symbol_choice_var = tk.StringVar(value="X")
 
         radio_x = CTkRadioButton(self.selection_frame, text="Play as X", variable=self.symbol_choice_var,
-                                 value="X", font=("Arial", 18), width=150)
-        radio_x.pack(pady=5, anchor="w")
+                                 value="X", font=("Arial", 25), width=150)
+        radio_x.pack(pady=5, padx=30, anchor="w")
 
         radio_o = CTkRadioButton(self.selection_frame, text="Play as O", variable=self.symbol_choice_var, value="O",
-                                 font=("Arial", 18), width=150)
-        radio_o.pack(pady=5, anchor="w")
+                                 font=("Arial", 25), width=150)
+        radio_o.pack(pady=5, padx=30, anchor="w")
 
         # Algorithm selector
-        algorithm_label = CTkLabel(self.selection_frame, text="Algorithm:", font=("Arial", 18))
-        algorithm_label.pack(pady=5, anchor="w")
+        algorithm_label = CTkLabel(self.selection_frame, text="Algorithm:", font=("Arial", 30))
+        algorithm_label.pack(pady=15, padx=30, anchor="w")
 
-        self.algorithm_variable = tk.StringVar(value="Alpha-Beta")
-        algorithm_menu = CTkOptionMenu(self.selection_frame, variable=self.algorithm_variable, values=["Minimax", "Alpha-Beta"])
-        algorithm_menu.pack(pady=5, anchor="w")
+        self.algorithm_variable = tk.StringVar(value="Minimax")
+        algorithm_menu = CTkOptionMenu(self.selection_frame, variable=self.algorithm_variable,
+                                       values=("Minimax", "Alpha-Beta"), width=500, height=45,
+                                       font=("Arial", 20), dropdown_font=("Arial", 20))
+        algorithm_menu.pack(pady=5, padx=30, anchor="w")
 
         # Difficulty selector
-        difficulty_label = CTkLabel(self.selection_frame, text="Difficulty:", font=("Arial", 18))
-        difficulty_label.pack(pady=5, anchor="w")
+        difficulty_label = CTkLabel(self.selection_frame, text="Difficulty:", font=("Arial", 30))
+        difficulty_label.pack(pady=15, padx=30, anchor="w")
 
         self.difficulty_variable = tk.StringVar(value=str(self.max_search_depth))
         difficulty_menu = CTkOptionMenu(self.selection_frame, variable=self.difficulty_variable,
-                                        values=[str(option) for option in DIFFICULTY_OPTIONS])
-        difficulty_menu.pack(pady=5, anchor="w")
+                                        values=[str(option) for option in DIFFICULTY_OPTIONS], width=200, height=40,
+                                       font=("Arial", 20), dropdown_font=("Arial", 20))
+        difficulty_menu.pack(pady=5, padx=30, anchor="w")
 
-        start_button = CTkButton(self.selection_frame, text="Start Game", font=("Arial", 24),
+        start_button = CTkButton(self.selection_frame, text="Start Game", font=("Arial", 30, "bold"), width=200, height=50,
                                  command=self._start_game)
-        start_button.pack(pady=20)
+        start_button.pack(pady=20, padx=30)
 
     def _start_game(self):
         self.max_search_depth = int(self.difficulty_variable.get())
@@ -232,7 +235,7 @@ class TicTacToeApp:
         self.control_frame = CTkFrame(self.master)  # dark‐mode frame
         self.control_frame.pack(pady=10)
 
-        restart_button = CTkButton(self.control_frame, text="Restart", font=("Arial", 18),
+        restart_button = CTkButton(self.control_frame, text="Restart", font=("Arial", 30),
                                    command=self._reset_to_selection)
         restart_button.pack(side="left", padx=10)
 
@@ -243,7 +246,7 @@ class TicTacToeApp:
         self.game_board = ["-" for _ in range(9)]
 
         for index in range(9):
-            button = CTkButton(self.board_frame, text="", width=50, height=50, font=("Arial", 48),
+            button = CTkButton(self.board_frame, text="", width=150, height=150, font=("Arial", 120),
                                command=lambda i=index: self._on_cell_clicked(i))
             button.grid(row=index // 3, column=index % 3, padx=5, pady=5)
             self.cell_buttons.append(button)
