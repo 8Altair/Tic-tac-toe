@@ -4,7 +4,8 @@ import customtkinter as ctk
 from tkinter import messagebox
 from customtkinter import CTk, CTkFrame, CTkButton, CTkRadioButton, CTkLabel, CTkOptionMenu
 
-from random import choice
+from algorithm_functions import compute_best_move, compute_best_move_plain, has_moves_left
+from game_functions import WINNING_LINES, BONUS_SCALE
 
 
 # Initialize dark theme
@@ -12,188 +13,7 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 
 DIFFICULTY_OPTIONS = tuple(range(1, 10))
-WINNING_LINES = \
-    (
-        (0, 1, 2),
-        (3, 4, 5),
-        (6, 7, 8),
-        (0, 3, 6),
-        (1, 4, 7),
-        (2, 5, 8),
-        (0, 4, 8),
-        (2, 4, 6),
-    )
-
-BONUS = 11
-BONUS_SCALE = 1.0   # Will be reset each game
-
-
-def has_moves_left(board_state):
-    return "-" in board_state
-
-
-def evaluate_board_state(board_state):
-    for a, b, c in WINNING_LINES:   # Terminal win/loss first
-        symbol = board_state[a]
-        if symbol == board_state[b] == board_state[c] and symbol != "-":
-            return 100 if symbol == "X" else -100
-
-    open_lines_max = open_lines_min = 0
-    two_in_row_max = two_in_row_min = 0
-
-    for a, b, c in WINNING_LINES:
-        line = (board_state[a], board_state[b], board_state[c])
-        if "O" not in line:  # Still winnable for X
-            open_lines_max += 1
-            if line.count("X") == 2:
-                two_in_row_max += 1
-        if "X" not in line:  # Still winnable for O
-            open_lines_min += 1
-            if line.count("O") == 2:
-                two_in_row_min += 1
-
-    line_term = BONUS_SCALE * (open_lines_max - open_lines_min)
-    threat_term = BONUS_SCALE ** 2 * BONUS * (two_in_row_max - two_in_row_min)
-
-    centre_term = 0
-    if board_state[4] == "X":
-        centre_term = BONUS_SCALE ** 2 * BONUS
-    elif board_state[4] == "O":
-        centre_term = -BONUS_SCALE ** 2 * BONUS
-
-    return line_term + threat_term + centre_term
-
-def get_ordered_moves(board_state, player):
-    candidates = []
-    for i in range(len(board_state)):
-        if board_state[i] == "-":
-            board_state[i] = player
-            score = evaluate_board_state(board_state)
-            board_state[i] = "-"
-            candidates.append((i, score))
-
-    return [i for i, _ in sorted(candidates, key=lambda pair: pair[1], reverse=(player == "X"))]    # For X (maximizer), sort descending; for O (minimizer), ascending
-
-
-
-def minimax_search(board_state, current_depth, is_maximizing, alpha, beta, depth_limit):
-    score = evaluate_board_state(board_state)
-    if score == 100 or score == -100 or current_depth == depth_limit or not has_moves_left(board_state):
-        return score
-
-    if is_maximizing:
-        best_score = float("-inf")
-        for index in get_ordered_moves(board_state, "X"):
-            board_state[index] = "X"
-            value = minimax_search(board_state, current_depth + 1, False, alpha, beta, depth_limit)
-            board_state[index] = "-"
-            best_score = max(best_score, value)
-            alpha = max(alpha, best_score)
-            if alpha >= beta:
-                break
-
-        return best_score
-    else:
-        best_score = float("inf")
-        for index in get_ordered_moves(board_state, "O"):
-            board_state[index] = "O"
-            value = minimax_search(board_state, current_depth + 1, True, alpha, beta, depth_limit)
-            board_state[index] = "-"
-            best_score = min(best_score, value)
-            beta = min(beta, best_score)
-            if alpha >= beta:
-                break
-
-        return best_score
-
-
-def minimax_plain(board_state, current_depth, is_maximizing, depth_limit):
-    score = evaluate_board_state(board_state)
-    if score == 100 or score == -100 or current_depth == depth_limit or not has_moves_left(board_state):
-        return score
-
-    if is_maximizing:
-        best_score = float("-inf")
-        for index in range(len(board_state)):
-            if board_state[index] == "-":
-                board_state[index] = "X"
-                value = minimax_plain(board_state, current_depth + 1, False, depth_limit)
-                board_state[index] = "-"
-                best_score = max(best_score, value)
-
-        return best_score
-    else:
-        best_score = float("inf")
-        for index in range(len(board_state)):
-            if board_state[index] == "-":
-                board_state[index] = "O"
-                value = minimax_plain(board_state, current_depth + 1, True, depth_limit)
-                board_state[index] = "-"
-                best_score = min(best_score, value)
-
-        return best_score
-
-
-def choose_move_with_noise(candidates, player_symbol, difficulty):
-    """
-        candidates : list[(index, score)]
-        difficulty : 1-9
-        Returns an index.  For difficulty < 5 we allow moves that are
-        *close* to the best score and pick randomly among them.
-    """
-    tolerance = max(0, (5 - difficulty) * 5)
-    if player_symbol == "X":
-        best = max(score for _, score in candidates)
-        # X is a maximizer → keep moves not much worse than best
-        pool = [i for i, score in candidates if best - score <= tolerance]
-    else:
-        best = min(score for _, score in candidates)
-        pool = [i for i, score in candidates if score - best <= tolerance]
-
-    # Easy / medium → random among pool
-    if difficulty < 5 and len(pool) > 1:
-        return choice(pool)
-
-    # Hard → deterministic best
-    return pool[0]
-
-
-def compute_best_move(board_state, player_symbol, depth_limit, difficulty):
-    """
-        Alpha-beta version.
-        Returns the chosen move index.
-    """
-    candidates = []
-    alpha = float("-inf")
-    beta  = float("inf")
-
-    for i in range(len(board_state)):
-        if board_state[i] != "-":
-            continue
-        board_state[i] = player_symbol
-        next_is_max = (player_symbol == "O")    # human turn next if AI just played
-        value = minimax_search(board_state, 0, next_is_max, alpha, beta, depth_limit)
-        board_state[i] = "-"
-        candidates.append((i, value))
-
-    return choose_move_with_noise(candidates, player_symbol, difficulty)
-
-
-def compute_best_move_plain(board_state, player_symbol, depth_limit, difficulty):
-    """
-        Plain minimax (no pruning).
-    """
-    candidates = []
-    for i in range(len(board_state)):
-        if board_state[i] != "-":
-            continue
-        board_state[i] = player_symbol
-        next_is_max = (player_symbol == "O")
-        value = minimax_plain(board_state, 0, next_is_max, depth_limit)
-        board_state[i] = "-"
-        candidates.append((i, value))
-
-    return choose_move_with_noise(candidates, player_symbol, difficulty)
+SCALE = BONUS_SCALE
 
 
 class TicTacToeApp:
@@ -250,8 +70,8 @@ class TicTacToeApp:
 
     def _start_game(self):
         self.max_search_depth = int(self.difficulty_variable.get())
-        global BONUS_SCALE
-        BONUS_SCALE = self.max_search_depth / 9
+        global SCALE
+        SCALE = self.max_search_depth / 9
         self.human_symbol = self.symbol_choice.get()
         self.ai_symbol = "O" if self.human_symbol == "X" else "X"
         self.current_turn = "X"
