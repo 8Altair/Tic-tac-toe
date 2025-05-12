@@ -1,8 +1,11 @@
 import tkinter as tk
-from tkinter import messagebox
-
 import customtkinter as ctk
+
+from tkinter import messagebox
 from customtkinter import CTk, CTkFrame, CTkButton, CTkRadioButton, CTkLabel, CTkOptionMenu
+
+from random import choice
+
 
 # Initialize dark theme
 ctk.set_appearance_mode("dark")
@@ -22,6 +25,7 @@ WINNING_LINES = \
     )
 
 BONUS = 11
+BONUS_SCALE = 1.0   # Will be reset each game
 
 
 def has_moves_left(board_state):
@@ -29,35 +33,35 @@ def has_moves_left(board_state):
 
 
 def evaluate_board_state(board_state):
-    for a, b, c in WINNING_LINES:
+    for a, b, c in WINNING_LINES:   # Terminal win/loss first
         symbol = board_state[a]
         if symbol == board_state[b] == board_state[c] and symbol != "-":
             return 100 if symbol == "X" else -100
 
-    open_lines_max = 0
-    open_lines_min = 0
-    two_in_row_max = 0
-    two_in_row_min = 0
+    open_lines_max = open_lines_min = 0
+    two_in_row_max = two_in_row_min = 0
 
     for a, b, c in WINNING_LINES:
         line = (board_state[a], board_state[b], board_state[c])
-        if "O" not in line:
+        if "O" not in line:  # Still winnable for X
             open_lines_max += 1
             if line.count("X") == 2:
                 two_in_row_max += 1
-        if "X" not in line:
+        if "X" not in line:  # Still winnable for O
             open_lines_min += 1
             if line.count("O") == 2:
                 two_in_row_min += 1
 
-    score = (open_lines_max - open_lines_min) + BONUS * (two_in_row_max - two_in_row_min)
+    line_term = BONUS_SCALE * (open_lines_max - open_lines_min)
+    threat_term = BONUS_SCALE ** 2 * BONUS * (two_in_row_max - two_in_row_min)
+
+    centre_term = 0
     if board_state[4] == "X":
-        score += BONUS
+        centre_term = BONUS_SCALE ** 2 * BONUS
     elif board_state[4] == "O":
-        score -= BONUS
+        centre_term = -BONUS_SCALE ** 2 * BONUS
 
-    return score
-
+    return line_term + threat_term + centre_term
 
 def get_ordered_moves(board_state, player):
     candidates = []
@@ -130,41 +134,66 @@ def minimax_plain(board_state, current_depth, is_maximizing, depth_limit):
         return best_score
 
 
-def compute_best_move(board_state, player_symbol, depth_limit):
-    best_move = -1
-
+def choose_move_with_noise(candidates, player_symbol, difficulty):
+    """
+        candidates : list[(index, score)]
+        difficulty : 1-9
+        Returns an index.  For difficulty < 5 we allow moves that are
+        *close* to the best score and pick randomly among them.
+    """
+    tolerance = max(0, (5 - difficulty) * 5)
     if player_symbol == "X":
-        best_value = float("-inf")
+        best = max(score for _, score in candidates)
+        # X is a maximizer → keep moves not much worse than best
+        pool = [i for i, score in candidates if best - score <= tolerance]
     else:
-        best_value = float("inf")
+        best = min(score for _, score in candidates)
+        pool = [i for i, score in candidates if score - best <= tolerance]
 
+    # Easy / medium → random among pool
+    if difficulty < 5 and len(pool) > 1:
+        return choice(pool)
+
+    # Hard → deterministic best
+    return pool[0]
+
+
+def compute_best_move(board_state, player_symbol, depth_limit, difficulty):
+    """
+        Alpha-beta version.
+        Returns the chosen move index.
+    """
+    candidates = []
     alpha = float("-inf")
-    beta = float("inf")
-    for index in get_ordered_moves(board_state, player_symbol):
-        board_state[index] = player_symbol
-        next_is_maximizing = player_symbol == "O"
-        move_value = minimax_search(board_state, 0, next_is_maximizing, alpha, beta, depth_limit)
-        board_state[index] = "-"
-        if (player_symbol == "X" and move_value > best_value) or (player_symbol == "O" and move_value < best_value):
-            best_value = move_value
-            best_move = index
-    return best_move
+    beta  = float("inf")
+
+    for i in range(len(board_state)):
+        if board_state[i] != "-":
+            continue
+        board_state[i] = player_symbol
+        next_is_max = (player_symbol == "O")    # human turn next if AI just played
+        value = minimax_search(board_state, 0, next_is_max, alpha, beta, depth_limit)
+        board_state[i] = "-"
+        candidates.append((i, value))
+
+    return choose_move_with_noise(candidates, player_symbol, difficulty)
 
 
-def compute_best_move_plain(board_state, player_symbol, depth_limit):
-    best_move = -1
-    best_value = float("-inf") if player_symbol == "X" else float("inf")
+def compute_best_move_plain(board_state, player_symbol, depth_limit, difficulty):
+    """
+        Plain minimax (no pruning).
+    """
+    candidates = []
+    for i in range(len(board_state)):
+        if board_state[i] != "-":
+            continue
+        board_state[i] = player_symbol
+        next_is_max = (player_symbol == "O")
+        value = minimax_plain(board_state, 0, next_is_max, depth_limit)
+        board_state[i] = "-"
+        candidates.append((i, value))
 
-    for index in range(len(board_state)):
-        if board_state[index] == "-":
-            board_state[index] = player_symbol
-            next_is_maximizing = player_symbol == "O"
-            move_value = minimax_plain(board_state, 0, next_is_maximizing, depth_limit)
-            board_state[index] = "-"
-            if (player_symbol == "X" and move_value > best_value) or (player_symbol == "O" and move_value < best_value):
-                best_value = move_value
-                best_move = index
-    return best_move
+    return choose_move_with_noise(candidates, player_symbol, difficulty)
 
 
 class TicTacToeApp:
@@ -176,7 +205,10 @@ class TicTacToeApp:
         self.human_symbol = None
         self.ai_symbol = None
         self.current_turn = None
+        self.symbol_choice = tk.StringVar(value="X")
+        self.algorithm_variable = tk.StringVar(value="Minimax")
         self.max_search_depth = DIFFICULTY_OPTIONS[0]
+        self.difficulty_variable = tk.StringVar(value=str(self.max_search_depth))
         self._setup_selection_panel()
 
     def _setup_selection_panel(self):
@@ -186,13 +218,11 @@ class TicTacToeApp:
         prompt_label = CTkLabel(self.selection_frame, text="Choose your symbol:", font=("Arial", 40, "bold"))
         prompt_label.pack(pady=20, padx=30)
 
-        self.symbol_choice_var = tk.StringVar(value="X")
-
-        radio_x = CTkRadioButton(self.selection_frame, text="Play as X", variable=self.symbol_choice_var,
+        radio_x = CTkRadioButton(self.selection_frame, text="Play as X", variable=self.symbol_choice,
                                  value="X", font=("Arial", 25), width=150)
         radio_x.pack(pady=5, padx=30, anchor="w")
 
-        radio_o = CTkRadioButton(self.selection_frame, text="Play as O", variable=self.symbol_choice_var, value="O",
+        radio_o = CTkRadioButton(self.selection_frame, text="Play as O", variable=self.symbol_choice, value="O",
                                  font=("Arial", 25), width=150)
         radio_o.pack(pady=5, padx=30, anchor="w")
 
@@ -200,7 +230,6 @@ class TicTacToeApp:
         algorithm_label = CTkLabel(self.selection_frame, text="Algorithm:", font=("Arial", 30))
         algorithm_label.pack(pady=15, padx=30, anchor="w")
 
-        self.algorithm_variable = tk.StringVar(value="Minimax")
         algorithm_menu = CTkOptionMenu(self.selection_frame, variable=self.algorithm_variable,
                                        values=("Minimax", "Alpha-Beta"), width=500, height=45,
                                        font=("Arial", 20), dropdown_font=("Arial", 20))
@@ -210,7 +239,6 @@ class TicTacToeApp:
         difficulty_label = CTkLabel(self.selection_frame, text="Difficulty:", font=("Arial", 30))
         difficulty_label.pack(pady=15, padx=30, anchor="w")
 
-        self.difficulty_variable = tk.StringVar(value=str(self.max_search_depth))
         difficulty_menu = CTkOptionMenu(self.selection_frame, variable=self.difficulty_variable,
                                         values=[str(option) for option in DIFFICULTY_OPTIONS], width=200, height=40,
                                        font=("Arial", 20), dropdown_font=("Arial", 20))
@@ -222,7 +250,9 @@ class TicTacToeApp:
 
     def _start_game(self):
         self.max_search_depth = int(self.difficulty_variable.get())
-        self.human_symbol = self.symbol_choice_var.get()
+        global BONUS_SCALE
+        BONUS_SCALE = self.max_search_depth / 9
+        self.human_symbol = self.symbol_choice.get()
         self.ai_symbol = "O" if self.human_symbol == "X" else "X"
         self.current_turn = "X"
         self.selection_frame.destroy()
@@ -271,10 +301,14 @@ class TicTacToeApp:
             self.master.after(100, self._execute_ai_move)
 
     def _execute_ai_move(self):
+        depth = self.max_search_depth - 1  # Level 1 ⇒ depth 0 search
+        if depth < 0:
+            depth = 0  # Safety change
+
         if self.algorithm_variable.get() == "Minimax":
-            best_index = compute_best_move_plain(self.game_board, self.current_turn, self.max_search_depth)
+            best_index = compute_best_move_plain(self.game_board, self.current_turn, depth, self.max_search_depth)
         else:
-            best_index = compute_best_move(self.game_board, self.current_turn, self.max_search_depth)
+            best_index = compute_best_move(self.game_board, self.current_turn, depth, self.max_search_depth)
 
         if best_index != -1:
             self.game_board[best_index] = self.current_turn
