@@ -1,3 +1,5 @@
+import os, sys
+
 import tkinter as tk
 import customtkinter as ctk
 
@@ -15,6 +17,32 @@ ctk.set_default_color_theme("dark-blue")
 DIFFICULTY_OPTIONS = tuple(range(1, 10))
 SCALE = BONUS_SCALE
 
+ICON_FILENAME = r"red-x-sign-symbol-icon-letter-x-sign-no-sign-design-transparent-background-free-png"
+
+def resource_path(*parts: str) -> str:
+    """
+        Return absolute path for dev and PyInstaller onefile.
+    """
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    base = os.fsdecode(base)
+    return os.path.join(base, *parts)
+
+def set_app_icon(win: tk.Tk) -> None:
+    # Best option in a packaged EXE: use the EXE's own icon (set via PyInstaller --icon)
+    if getattr(sys, "frozen", False):  # Running as a PyInstaller bundle
+        try:
+            win.iconbitmap(sys.executable)
+            return
+        except tk.TclError:
+            pass  # fall through
+
+    # Otherwise (or if the above failed), use the .ico from the Icon folder
+    icon_path = resource_path("Icon", f"{ICON_FILENAME}.ico")
+    try:
+        win.iconbitmap(icon_path)
+        return
+    except tk.TclError:
+        pass
 
 class TicTacToeApp:
     def __init__(self, master):
@@ -22,6 +50,9 @@ class TicTacToeApp:
         self.master.title("Tic Tac Toe")
         self.master.geometry("700x750")
         self.master.resizable(True, True)
+
+        set_app_icon(self.master)
+
         self.human_symbol = None
         self.ai_symbol = None
         self.current_turn = None
