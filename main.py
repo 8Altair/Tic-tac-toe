@@ -20,21 +20,17 @@ SCALE = BONUS_SCALE
 ICON_FILENAME = r"red-x-sign-symbol-icon-letter-x-sign-no-sign-design-transparent-background-free-png"
 
 def resource_path(*parts: str) -> str:
-    """
-        Return absolute path for dev and PyInstaller onefile.
-    """
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     base = os.fsdecode(base)
     return os.path.join(base, *parts)
 
 def set_app_icon(win: tk.Tk) -> None:
-    # Best option in a packaged EXE: use the EXE's own icon (set via PyInstaller --icon)
     if getattr(sys, "frozen", False):  # Running as a PyInstaller bundle
         try:
             win.iconbitmap(sys.executable)
             return
         except tk.TclError:
-            pass  # fall through
+            pass  # Fall through
 
     # Otherwise (or if the above failed), use the .ico from the Icon folder
     icon_path = resource_path("Icon", f"{ICON_FILENAME}.ico")
